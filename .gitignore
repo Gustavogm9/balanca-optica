@@ -1,0 +1,17 @@
+__pycache__/
+*.pyc
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+data/raw/
+data/interim/
+*.ply
+*.png
+!reports/**/*.png
+!docs/**/*.png
+!reports/**/*.png
+models/*.joblib
+.env
+.DS_Store

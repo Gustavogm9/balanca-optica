@@ -1,0 +1,9 @@
+# Intrínsecos da câmera instalada (calibrar com tabuleiro; valores nominais do fabricante só para começar)
+name: femto_bolt_fazenda_serra_bebedouro
+fx: 504.0
+fy: 504.0
+cx: 320.0
+cy: 288.0
+width: 640
+height: 576
+depth_scale: 0.001   # unidade do PNG -> metros (mm = 0.001)

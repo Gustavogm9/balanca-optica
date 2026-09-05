@@ -1,0 +1,42 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "balanca-optica"
+version = "0.1.0"
+description = "Motor de estimativa de peso bovino por visão computacional (RGB-D fixa e celular) - Guilds"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Proprietary" }
+authors = [{ name = "Guilds", email = "contato@guilds.com.br" }]
+dependencies = [
+  "numpy>=1.26",
+  "scipy>=1.11",
+  "pandas>=2.0",
+  "scikit-learn>=1.4",
+  "scikit-image>=0.22",
+  "opencv-python-headless>=4.8",
+  "joblib>=1.3",
+  "pyyaml>=6.0",
+  "matplotlib>=3.8",
+  "openpyxl>=3.1",
+]
+
+[project.optional-dependencies]
+gbm = ["lightgbm>=4.0"]
+yolo = ["ultralytics>=8.2"]
+dev = ["pytest>=8.0", "ruff>=0.4"]
+
+[project.scripts]
+bo = "balanca_optica.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["balanca_optica*"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
