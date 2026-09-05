@@ -1,4 +1,4 @@
-"""CLI: bo extract | bo validate | bo train | bo predict | bo calibrate"""
+"""CLI: bo extract | validate | train | predict | calibrate | capture | pair | import-phone"""
 from __future__ import annotations
 
 import argparse
@@ -24,6 +24,12 @@ def cmd_extract(a):
     if a.dataset == "cowdatabase2":
         from .datasets.cowdatabase2 import extract_features
         df = extract_features(a.root, view=a.view)
+    elif a.dataset == "cowdb":
+        from .datasets.cowdb import extract_features
+        df = extract_features(a.root, view=a.view)
+    elif a.dataset in ("bai", "rahman"):
+        from .datasets.mendeley import bai_records, rahman_records, extract
+        df = extract(bai_records(a.root) if a.dataset == "bai" else rahman_records(a.root))
     else:
         raise SystemExit("dataset desconhecido")
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
@@ -105,6 +111,34 @@ def cmd_calibrate(a):
     print(f"rebanho {a.herd}: a={cal.a:+.4f} b={cal.b:.4f} n={cal.n_pairs}; MAPE {before:.2f}% -> {after:.2f}% (in-sample)")
 
 
+def cmd_capture(a):
+    from .capture.sources import open_source
+    from .capture.daemon import CaptureDaemon, CaptureConfig
+    cfg = CaptureConfig(out_dir=a.out, site=a.site, model_path=a.model, h_min=a.h_min,
+                        presence_on=a.on, presence_off=a.off, max_clip_s=a.max_clip)
+    src = open_source(a.source)
+    d = CaptureDaemon(src, cfg, on_reading=lambda m: print(json.dumps(m["estimate"] | {"clip": m["clip_id"], "n": m["n_frames"]})))
+    print(f"capturando de {a.source} -> {a.out} (Ctrl+C para parar)")
+    d.run(max_frames=a.max_frames)
+
+
+def cmd_pair(a):
+    from .capture.pairing import pair_clips_with_scale
+    df = pair_clips_with_scale(a.readings, a.scale, a.window)
+    df.to_csv(a.out, index=False)
+    print(f"{len(df)} pares gravados em {a.out}")
+
+
+def cmd_import_phone(a):
+    from .phone.import_media import records_from_csv, process_media
+    from .segmentation.yolo import YoloSegmenter
+    recs = records_from_csv(a.csv, a.media)
+    df = process_media(recs, YoloSegmenter(a.weights, conf=0.3), every_n=a.every, max_frames=a.max_frames)
+    Path(a.out).parent.mkdir(parents=True, exist_ok=True)
+    df.to_csv(a.out, index=False)
+    print(f"{len(df)} frames de {df.animal_id.nunique() if len(df) else 0} animais -> {a.out}")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="bo", description="Balança Óptica - motor de estimativa de peso bovino")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -137,6 +171,25 @@ def main(argv=None):
     c = sp.add_parser("calibrate", help="calibração por rebanho a partir de pares balança/modelo")
     c.add_argument("--pairs", required=True); c.add_argument("--herd", required=True); c.add_argument("--out", required=True)
     c.set_defaults(fn=cmd_calibrate)
+
+    k = sp.add_parser("capture", help="daemon do ponto fixo (kinect2|openni2|orbbec|realsense|replay:<pasta>)")
+    k.add_argument("--source", required=True); k.add_argument("--out", default="capture_out")
+    k.add_argument("--site", default="ponto_fixo"); k.add_argument("--model", default=None)
+    k.add_argument("--h-min", type=float, default=0.35); k.add_argument("--on", type=float, default=0.04)
+    k.add_argument("--off", type=float, default=0.01); k.add_argument("--max-clip", type=float, default=20.0)
+    k.add_argument("--max-frames", type=int, default=None)
+    k.set_defaults(fn=cmd_capture)
+
+    pr = sp.add_parser("pair", help="pareia clipes (readings.csv) com pesagens da balança")
+    pr.add_argument("--readings", required=True); pr.add_argument("--scale", required=True)
+    pr.add_argument("--out", required=True); pr.add_argument("--window", type=float, default=90.0)
+    pr.set_defaults(fn=cmd_pair)
+
+    ip = sp.add_parser("import-phone", help="fotos/vídeos de celular + CSV de coleta -> features")
+    ip.add_argument("--csv", required=True); ip.add_argument("--media", required=True); ip.add_argument("--out", required=True)
+    ip.add_argument("--weights", default="yolov8n-seg.pt"); ip.add_argument("--every", type=int, default=6)
+    ip.add_argument("--max-frames", type=int, default=40)
+    ip.set_defaults(fn=cmd_import_phone)
 
     a = ap.parse_args(argv)
     a.fn(a)
