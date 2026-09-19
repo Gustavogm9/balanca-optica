@@ -157,6 +157,19 @@ def cmd_marker(a):
     print(f"marcador id {a.id}: {out} e {pdf} (A4, imprimir a 100%; lado do quadrado = {DEFAULT_SIDE_M*100:.0f} cm)")
 
 
+def cmd_seg(a):
+    from .segmentation import finetune as ft
+    if a.action == "pseudo":
+        print("data.yaml:", ft.pseudo_label(a.images, a.out, weights=a.weights))
+    elif a.action == "merge":
+        print("data.yaml:", ft.merge(a.sources, a.out))
+    elif a.action == "train":
+        best = ft.train(a.data, weights=a.weights, epochs=a.epochs, imgsz=a.imgsz, batch=a.batch, device=a.device)
+        print("best.pt:", best); print(json.dumps(ft.evaluate(best, a.data, imgsz=a.imgsz, device=a.device)))
+    elif a.action == "eval":
+        print(json.dumps(ft.evaluate(a.weights, a.data, imgsz=a.imgsz, device=a.device)))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="bo", description="Balança Óptica - motor de estimativa de peso bovino")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -212,6 +225,15 @@ def main(argv=None):
     mk = sp.add_parser("marker", help="gera o marcador ArUco de escala para imprimir em A4")
     mk.add_argument("--id", type=int, default=0); mk.add_argument("--out", default="marcador.png")
     mk.set_defaults(fn=cmd_marker)
+
+    sg = sp.add_parser("seg", help="segmentador: pseudo | merge | train | eval")
+    sg.add_argument("action", choices=["pseudo", "merge", "train", "eval"])
+    sg.add_argument("--images", default=None); sg.add_argument("--sources", nargs="*", default=[])
+    sg.add_argument("--out", default="data/seg"); sg.add_argument("--data", default=None)
+    sg.add_argument("--weights", default="yolov8n-seg.pt"); sg.add_argument("--epochs", type=int, default=50)
+    sg.add_argument("--imgsz", type=int, default=640); sg.add_argument("--batch", type=int, default=8)
+    sg.add_argument("--device", default=None)
+    sg.set_defaults(fn=cmd_seg)
 
     a = ap.parse_args(argv)
     a.fn(a)

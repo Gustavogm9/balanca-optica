@@ -121,6 +121,9 @@ bo pair --readings ~/bo_capture/readings.csv --scale balanca.csv --out pairs.csv
 1. Coleta na Fazenda Serra: 20 a 30 animais pesados + vídeo de celular com marcador A4 (esta semana).
 2. Kinect v2 usado na saída da balança; `bo capture` gravando; `bo pair` montando o dataset.
 3. ~~Detecção automática do marcador~~ (feito: `bo marker` + `phone/marker.py`); levar para o app.
-4. Fine-tuning YOLO-seg com ~300 máscaras de Nelore (cupim, barbela, umbigo).
+4. Fine-tuning YOLO-seg com máscaras de Nelore: pipeline pronto (`bo seg pseudo|merge|train|eval`,
+   `segmentation/finetune.py`); falta o dado. Fluxo: `bo seg pseudo` nas fotos de Nelore -> corrigir
+   as máscaras no CVAT/Roboflow (horas, não dias) -> `bo seg merge` com o público -> `bo seg train`.
+   Smoke test em CPU (3 épocas, 416 px, 371 imagens públicas + pseudo): mask mAP50 0,65.
 5. Uploader da fila (Supabase Storage) e dashboard interno de acurácia por fazenda.
 6. App Expo: captura guiada, ArUco, LiDAR (ARKit), inferência local ONNX.

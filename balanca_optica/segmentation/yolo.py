@@ -20,9 +20,13 @@ class YoloSegmenter:
         self.model = YOLO(weights)
         self.conf = conf
         self.device = device
+        names = self.model.names
+        # modelo fine-tunado (1 classe 'bovino') -> classe 0; COCO -> 'cow' (19)
+        self.class_id = 0 if len(names) == 1 else next((i for i, n in names.items() if str(n).lower() in ("cow", "bovino")), COCO_COW)
 
-    def mask(self, rgb_bgr: np.ndarray, class_id: int = COCO_COW) -> np.ndarray | None:
+    def mask(self, rgb_bgr: np.ndarray, class_id: int | None = None) -> np.ndarray | None:
         """Devolve a máscara booleana do maior animal detectado, ou None."""
+        class_id = self.class_id if class_id is None else class_id
         res = self.model.predict(rgb_bgr, conf=self.conf, device=self.device, verbose=False)[0]
         if res.masks is None:
             return None
