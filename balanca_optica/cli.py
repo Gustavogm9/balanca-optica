@@ -139,6 +139,24 @@ def cmd_import_phone(a):
     print(f"{len(df)} frames de {df.animal_id.nunique() if len(df) else 0} animais -> {a.out}")
 
 
+def cmd_marker(a):
+    import cv2
+    from .phone.marker import generate_marker
+    from PIL import Image
+    from .phone.marker import DEFAULT_SIDE_M
+    img = generate_marker(a.id, side_px=1200)
+    dpi = 1200 / (DEFAULT_SIDE_M * 100 / 2.54)  # px do lado / polegadas do lado
+    pil = Image.fromarray(img)
+    out = Path(a.out)
+    pil.save(out, dpi=(dpi, dpi))
+    pdf = out.with_suffix(".pdf")
+    # página A4 (210x297 mm) com o marcador centralizado, escala física exata
+    a4 = Image.new("1", (int(8.27 * dpi), int(11.69 * dpi)), 255)
+    a4.paste(pil.convert("1"), ((a4.width - pil.width) // 2, (a4.height - pil.height) // 2))
+    a4.save(pdf, resolution=dpi)
+    print(f"marcador id {a.id}: {out} e {pdf} (A4, imprimir a 100%; lado do quadrado = {DEFAULT_SIDE_M*100:.0f} cm)")
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="bo", description="Balança Óptica - motor de estimativa de peso bovino")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -190,6 +208,10 @@ def main(argv=None):
     ip.add_argument("--weights", default="yolov8n-seg.pt"); ip.add_argument("--every", type=int, default=6)
     ip.add_argument("--max-frames", type=int, default=40)
     ip.set_defaults(fn=cmd_import_phone)
+
+    mk = sp.add_parser("marker", help="gera o marcador ArUco de escala para imprimir em A4")
+    mk.add_argument("--id", type=int, default=0); mk.add_argument("--out", default="marcador.png")
+    mk.set_defaults(fn=cmd_marker)
 
     a = ap.parse_args(argv)
     a.fn(a)

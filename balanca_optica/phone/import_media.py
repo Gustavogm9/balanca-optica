@@ -6,8 +6,9 @@ colunas: animal_id, weight_kg, file, view (lateral|dorsal|traseira|outro),
 e a pasta com as mídias. Saída: um CSV de features por frame, pronto para
 `bo validate` / `bo train` (uma linha por frame; agregação por animal na avaliação).
 
-Escala (px/m), na ordem de preferência: distance_m + focal (LiDAR/ARKit);
-marker_px/marker_m (marcador impresso); height_cm (só experimentos). Sem nada, as
+Escala (px/m), na ordem de preferência: marcador ArUco detectado automaticamente
+(tools/marcador.png, lado 0,16 m); distance_m + focal (LiDAR/ARKit); marker_px/marker_m
+(marcador medido à mão); height_cm (só experimentos). Sem nada, as
 features saem normalizadas pela diagonal da imagem.
 """
 from __future__ import annotations
@@ -21,6 +22,7 @@ import pandas as pd
 
 from ..geometry.silhouette import (scale_from_distance, scale_from_known_height,
                                    scale_from_marker, silhouette_features)
+from .marker import DEFAULT_SIDE_M, detect_marker
 
 VIDEO_EXT = {".mp4", ".mov", ".avi", ".mkv", ".m4v"}
 IMAGE_EXT = {".jpg", ".jpeg", ".png", ".heic", ".webp"}
@@ -37,6 +39,7 @@ class PhoneRecord:
     marker_px: float | None = None
     marker_m: float | None = None
     height_cm: float | None = None
+    aruco_side_m: float | None = DEFAULT_SIDE_M  # None desliga a detecção automática
     meta: dict | None = None
 
 
@@ -94,7 +97,10 @@ def process_media(records: list[PhoneRecord], segmenter, every_n: int = 6,
                 continue
             h_px = int(mask.any(axis=1).sum())
             px_per_m, scale_src = None, "none"
-            if rec.distance_m:
+            hit = detect_marker(img, rec.aruco_side_m) if rec.aruco_side_m else None
+            if hit is not None and hit.skew >= 0.7:
+                px_per_m, scale_src = hit.px_per_m, "aruco"
+            elif rec.distance_m:
                 px_per_m, scale_src = scale_from_distance(rec.distance_m, _focal_px(img.shape[1])), "distance"
             elif rec.marker_px and rec.marker_m:
                 px_per_m, scale_src = scale_from_marker(rec.marker_px * s, rec.marker_m), "marker"
@@ -110,7 +116,8 @@ def process_media(records: list[PhoneRecord], segmenter, every_n: int = 6,
             q_ok = (not q_touch) and f["sil_fill"] > 0.35 and q_blur > 30
             rows.append({"animal_id": rec.animal_id, "weight_kg": rec.weight_kg, "file": rec.file.name,
                          "frame_idx": k, "view": rec.view, "scale_src": scale_src,
-                         "px_per_m": px_per_m, "mask_h_px": h_px, **f,
+                         "px_per_m": px_per_m, "mask_h_px": h_px,
+                         "marker_id": hit.marker_id if hit else None, "marker_skew": hit.skew if hit else None, **f,
                          "q_touches_border": q_touch, "q_blur": q_blur, "q_ok": q_ok,
                          **(rec.meta or {})})
         if verbose:

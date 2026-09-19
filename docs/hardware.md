@@ -7,9 +7,9 @@ até a Fase 3.
 ## Kit A — celular do próprio produtor (R$ 0)
 
 - Qualquer celular com câmera. iPhone Pro (LiDAR) melhora a escala, mas não é obrigatório.
-- **Marcador de escala**: uma folha A4 (0,297 × 0,210 m) plastificada, ou placa de 30 × 30 cm
-  com xadrez preto e branco, encostada no animal ou na cerca à mesma distância. O importador
-  usa `marker_px/marker_m`; o app da Fase 2 detecta o marcador automaticamente.
+- **Marcador de escala**: `bo marker` gera `tools/marcador.pdf` (ArUco de 16 cm em A4). Imprimir
+  a 100%, conferir a régua de 10 cm, plastificar. Encostado no animal ou na cerca, à mesma
+  distância da câmera, o importador detecta e calcula a escala sozinho (`scale_src = aruco`).
 - Formulário de coleta offline: `tools/coleta.html` (abra no celular, funciona sem internet,
   exporta CSV). Importação: `bo import-phone`.
 - Resultado esperado (validado em dataset público CC BY): **sem escala o celular não funciona

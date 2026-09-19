@@ -49,3 +49,19 @@ def test_phone_import_with_marker_scale(tmp_path):
     # corpo 200x400 px a 200 px/m -> 1 x 2 m = 2 m² (mais a perna)
     assert 2.0 <= df.sil_body_area.iloc[0] <= 2.3
     assert df.sil_body_h.iloc[0] < df.sil_bbox_h.iloc[0]  # perna excluída do tronco
+
+
+def test_aruco_marker_roundtrip_scale(tmp_path):
+    from balanca_optica.phone.marker import generate_marker, detect_marker, DEFAULT_SIDE_M
+    m = generate_marker(3, side_px=300, border_px=40)
+    scene = np.full((900, 1200), 140, np.uint8)
+    scene[200:200 + m.shape[0], 700:700 + m.shape[1]] = m
+    scene = cv2.cvtColor(scene, cv2.COLOR_GRAY2BGR)
+    hit = detect_marker(scene)
+    assert hit is not None and hit.marker_id == 3
+    assert abs(hit.side_px - 300) < 4
+    assert abs(hit.px_per_m - 300 / DEFAULT_SIDE_M) / (300 / DEFAULT_SIDE_M) < 0.02
+    # integração no importador: escala vem do aruco mesmo sem distance/marker manual
+    f = tmp_path / "a.jpg"; cv2.imwrite(str(f), scene)
+    df = process_media([PhoneRecord("A2", 400.0, f, "lateral")], _FakeSeg(), verbose=False)
+    assert df.scale_src.iloc[0] == "aruco" and df.marker_id.iloc[0] == 3

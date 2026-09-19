@@ -98,6 +98,7 @@ tests/                   sintético com volume analítico, regressor, conformal,
 ## Fluxo de campo (Fase 0, custo ~zero)
 
 ```bash
+bo marker --out tools/marcador.png        # imprime tools/marcador.pdf (A4, 100%), plastifica
 # no celular: abra tools/coleta.html, registre brinco + peso + nome do vídeo por animal
 # no computador:
 bo import-phone --csv coleta.csv --media ./videos --out data/processed/serra_phone.csv
@@ -119,7 +120,7 @@ bo pair --readings ~/bo_capture/readings.csv --scale balanca.csv --out pairs.csv
 
 1. Coleta na Fazenda Serra: 20 a 30 animais pesados + vídeo de celular com marcador A4 (esta semana).
 2. Kinect v2 usado na saída da balança; `bo capture` gravando; `bo pair` montando o dataset.
-3. Detecção automática do marcador (ArUco/xadrez) no importador e no app.
+3. ~~Detecção automática do marcador~~ (feito: `bo marker` + `phone/marker.py`); levar para o app.
 4. Fine-tuning YOLO-seg com ~300 máscaras de Nelore (cupim, barbela, umbigo).
 5. Uploader da fila (Supabase Storage) e dashboard interno de acurácia por fazenda.
 6. App Expo: captura guiada, ArUco, LiDAR (ARKit), inferência local ONNX.
