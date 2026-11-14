@@ -88,8 +88,9 @@ balanca_optica/
     calibration.py       calibração por rebanho com encolhimento bayesiano
   aggregate.py           mediana multi-frame + confiabilidade
   eval/                  métricas (MAPE, MAE, Bland-Altman, erro de lote), CV agrupada, relatório
-  datasets/              loaders (cowdatabase2, cowdb, mendeley bai/rahman)
-  cli.py                 bo extract | validate | train | predict | calibrate | capture | pair | import-phone
+  datasets/              loaders (cowdatabase2, cowdb, mendeley bai/rahman) e auction.py
+                         (catálogo de leilão PDF + vídeo por lote -> pares vídeo+peso Nelore)
+  cli.py                 bo extract | validate | train | predict | calibrate | capture | pair | import-phone | marker | seg | auction
 tools/coleta.html        formulário de coleta offline para o celular (exporta CSV)
 docs/hardware.md         kit de investimento mínimo (celular + Kinect v2 usado)
 tests/                   sintético com volume analítico, regressor, conformal, calibração, daemon, importador
@@ -116,10 +117,20 @@ bo pair --readings ~/bo_capture/readings.csv --scale balanca.csv --out pairs.csv
 - Modelos simples primeiro (linear/PLS); CNN só com milhares de animais.
 - Toda pesagem oficial do cliente vira teste (e depois treino).
 
+## Acelerador: leilões (ver docs/leiloes.md)
+
+```bash
+bo auction discover --url <página do leilão no programaleiloes.com> --out data/leiloes/x
+bo auction fetch --csv data/leiloes/x/lotes.csv --out data/leiloes/x/videos --cookies chrome   # na sua máquina
+bo auction build --csv data/leiloes/x/lotes.csv --videos data/leiloes/x/videos --out data/leiloes/x/coleta.csv
+```
+
 ## Próximos passos
 
-1. Coleta na Fazenda Serra: 20 a 30 animais pesados + vídeo de celular com marcador A4 (esta semana).
-2. Kinect v2 usado na saída da balança; `bo capture` gravando; `bo pair` montando o dataset.
+1. Coleta na Fazenda Serra: 20 a 30 animais pesados + vídeo de celular com marcador A4.
+2. Leilões: rodar `bo auction` em 5 a 10 leilões Nelore (touros, matrizes, bezerros) e pedir
+   autorização às leiloeiras; fine-tune do segmentador com esses vídeos.
+   (Ponto fixo com Kinect fica para a Fase 3.)
 3. ~~Detecção automática do marcador~~ (feito: `bo marker` + `phone/marker.py`); levar para o app.
 4. Fine-tuning YOLO-seg com máscaras de Nelore: pipeline pronto (`bo seg pseudo|merge|train|eval`,
    `segmentation/finetune.py`); falta o dado. Fluxo: `bo seg pseudo` nas fotos de Nelore -> corrigir

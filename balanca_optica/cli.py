@@ -170,6 +170,26 @@ def cmd_seg(a):
         print(json.dumps(ft.evaluate(a.weights, a.data, imgsz=a.imgsz, device=a.device)))
 
 
+def cmd_auction(a):
+    from .datasets import auction as au
+    if a.action == "discover":
+        d = au.discover(a.url, a.out)
+        if d["pdf"]:
+            lots = au.parse_catalog(d["pdf"], hint=a.url.rsplit("/", 1)[-1].replace("-", " "))
+            for l in lots:  # completa vídeo a partir da página quando o PDF não tem o link
+                if not l.video_id:
+                    l.video_id = d["videos"].get(l.lot.lstrip("0") or "0")
+            print("csv:", au.write_lots_csv(lots, Path(a.out) / "lotes.csv", source=a.url) if lots else "nenhum lote com peso (leilão de genética/prenhez?)")
+    elif a.action == "parse":
+        lots = au.parse_catalog(a.pdf, hint=a.hint)
+        print("csv:", au.write_lots_csv(lots, a.out, source=a.source or Path(a.pdf).name))
+    elif a.action == "fetch":
+        got = au.fetch_videos(a.csv, a.out, cookies_from_browser=a.cookies, limit=a.limit)
+        print(f"{len(got)} vídeos disponíveis em {a.out}")
+    elif a.action == "build":
+        au.build_collection_csv(a.csv, a.videos, a.out, farm=a.farm, ref_date=a.ref_date, include_lots=a.include_lots)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="bo", description="Balança Óptica - motor de estimativa de peso bovino")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -234,6 +254,18 @@ def main(argv=None):
     sg.add_argument("--imgsz", type=int, default=640); sg.add_argument("--batch", type=int, default=8)
     sg.add_argument("--device", default=None)
     sg.set_defaults(fn=cmd_seg)
+
+    au = sp.add_parser("auction", help="catálogo de leilão (PDF) + vídeos por lote -> dataset: parse | fetch | build")
+    au.add_argument("action", choices=["discover", "parse", "fetch", "build"])
+    au.add_argument("--url", default=None, help="discover: página do leilão (programaleiloes.com/agenda/leilao/...)")
+    au.add_argument("--pdf", default=None); au.add_argument("--csv", default=None); au.add_argument("--videos", default=None)
+    au.add_argument("--out", required=True); au.add_argument("--source", default=None)
+    au.add_argument("--cookies", default=None, help="ex.: chrome (passa --cookies-from-browser ao yt-dlp)")
+    au.add_argument("--limit", type=int, default=None); au.add_argument("--farm", default="leilao")
+    au.add_argument("--hint", default=None, help="parse: título/sexo do leilão (ex.: 'touros nelore') quando o PDF não diz")
+    au.add_argument("--include-lots", action="store_true", help="build: inclui lotes com peso médio (modo lote)")
+    au.add_argument("--ref-date", default=None, help="data da pesagem/leilão AAAA-MM-DD para calcular categoria")
+    au.set_defaults(fn=cmd_auction)
 
     a = ap.parse_args(argv)
     a.fn(a)
