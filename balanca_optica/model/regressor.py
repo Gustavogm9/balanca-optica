@@ -41,6 +41,7 @@ class WeightRegressor:
     categorical: list[str] = field(default_factory=list)
     log_target: bool = True
     pipeline: Pipeline | None = None
+    version: str | None = None  # ex.: 'phone_v0_bai_2026-11'; gravado em versao_modelo
 
     def _build(self) -> Pipeline:
         num = Pipeline([("log", FunctionTransformer(_safe_log)), ("sc", StandardScaler())])

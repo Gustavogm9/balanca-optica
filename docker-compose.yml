@@ -1,0 +1,14 @@
+services:
+  worker:
+    build: .
+    env_file: .env.example   # copie para .env com os valores reais e troque aqui
+    restart: unless-stopped
+    command: ["bo", "worker", "--loop"]
+
+  api:
+    build: .
+    env_file: .env.example
+    restart: unless-stopped
+    command: ["bo", "serve", "--port", "8000"]
+    ports:
+      - "8000:8000"

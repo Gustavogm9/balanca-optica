@@ -13,6 +13,7 @@ data/interim/
 !docs/**/*.png
 !reports/**/*.png
 models/*.joblib
+!models/phone_v0_bai.joblib
 .env
 .DS_Store
 runs/

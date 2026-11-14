@@ -16,6 +16,7 @@ depth.png ─► segmentação por geometria (piso RANSAC, maior componente, cor
 ```bash
 pip install -e ".[dev]"          # núcleo + testes
 pip install -e ".[gbm,yolo]"     # opcional: LightGBM e YOLO-seg
+pip install -e ".[worker,serve]" # worker do Supabase (Pasto Leve) e API HTTP
 pytest -q
 ```
 
@@ -50,6 +51,7 @@ Todos leave-one-animal-out, nunca por imagem. Relatórios com Bland-Altman em `r
 | caminho | dataset | n | modelo | MAPE | referência |
 |---|---|---|---|---|---|
 | **Celular, 1 foto lateral, COM escala** (cernelha ≈ LiDAR/marcador) | Bai (Horqin, CC BY 4.0), 341-644 kg | 67 | gbm / linear | **7,4% / 8,1%** (R² 0,69) | fita torácica 5,4%; média 15,3% |
+| Celular, idem, **modelo em produção** `models/phone_v0_bai.joblib` (`phone_v0_bai_2026-11`, LightGBM, 12 features de silhueta) | idem | 67 | gbm | **6,8%** (MAE 32 kg, R² 0,71); IC 90% conformal ±19,8% com 1 frame (cobertura 92,5%) | treinado com `bo train --numeric ... --view lateral --with-scale` |
 | Celular, 1 foto lateral, SEM escala | idem | 67 | linear | 16,8% (pior que a média) | |
 | Celular, 5 ângulos, SEM escala, mediana | Rahman (Dhaka, CC BY 4.0), 40-950 kg | 69 | linear | 54% (rótulos arredondados, distância variável) | |
 | Câmera fixa dorsal RGB-D | CowDatabase2 (Angus, Kinect v2), 556-746 kg | 91 | linear | 3,9% (média 4,1%; fita 3,6%) | faixa estreitíssima |
@@ -90,7 +92,10 @@ balanca_optica/
   eval/                  métricas (MAPE, MAE, Bland-Altman, erro de lote), CV agrupada, relatório
   datasets/              loaders (cowdatabase2, cowdb, mendeley bai/rahman) e auction.py
                          (catálogo de leilão PDF + vídeo por lote -> pares vídeo+peso Nelore)
-  cli.py                 bo extract | validate | train | predict | calibrate | capture | pair | import-phone | marker | seg | auction
+  phone/estimate.py      estimate_from_media: mídia -> {weight_kg, ic, n_frames, scale_src, ...} (núcleo do worker e da API)
+  worker/supabase_worker.py  fila do Pasto Leve (Supabase): pendentes -> download -> calibração da fazenda -> update
+  serve.py               FastAPI: POST /estimate, GET /health
+  cli.py                 bo extract | validate | train | predict | calibrate | capture | pair | import-phone | marker | seg | auction | worker | serve
 tools/coleta.html        formulário de coleta offline para o celular (exporta CSV)
 docs/hardware.md         kit de investimento mínimo (celular + Kinect v2 usado)
 tests/                   sintético com volume analítico, regressor, conformal, calibração, daemon, importador
@@ -108,6 +113,33 @@ bo validate --features data/processed/serra_phone.csv --out reports/serra_phone 
 # ponto fixo com Kinect v2 usado (ver docs/hardware.md)
 bo capture --source kinect2 --out ~/bo_capture --site fazenda_serra_balanca
 bo pair --readings ~/bo_capture/readings.csv --scale balanca.csv --out pairs.csv
+```
+
+## Worker (Pasto Leve / Supabase), API e Docker
+
+O app Pasto Leve grava o vídeo no bucket privado `pesagens-midia` (`<fazenda_id>/<aaaa-mm>/<uuid>.mp4`) e
+insere em `public.pesagens_animais` um registro com `fonte='celular'` e `metadados.status='pendente'`
+(opcionais em `metadados`: `distance_m` do LiDAR, `marker_m` se o ArUco não tiver 16 cm, `height_cm`).
+O worker:
+
+1. busca os pendentes (`order created_at`), marca `status='processando'`;
+2. baixa a mídia, monta a calibração da fazenda a partir de pares (pesagem `balanca` x pesagem por
+   câmera `processada` do mesmo animal com |Δt| ≤ 2 dias; < 5 pares = sem calibração);
+3. roda `estimate_from_media` (frames a cada 6, até 40; só frames `q_ok`; mediana; IC conformal 90%);
+4. grava `peso_estimado_kg`, `ic_inferior_kg`, `ic_superior_kg`, `n_frames`, `confiabilidade` (0 a 1:
+   1 = ≥3 frames aprovados e dispersão < 6%), `versao_modelo` e `metadados` mesclados com
+   `{status: processada|erro, reason, scale_src, marker_detected, reliable, rel_mad, calibration, processed_at}`.
+   Sem escala em nenhum frame (`reason='sem_escala'`) o registro fica em `erro` com `peso_estimado_kg` nulo:
+   o modelo de silhueta sem marcador/LiDAR não serve. Erros nunca derrubam o loop.
+
+```bash
+cp .env.example .env            # SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY (só no servidor), BO_MODEL, BO_SEG_WEIGHTS, BO_POLL_SECONDS
+bo worker --once                # processa a fila uma vez (ou BO_ONCE=true)
+bo worker --loop                # fica em loop (padrão)
+bo serve --port 8000            # API sem Supabase: POST /estimate (multipart file + distance_m|marker_m|height_cm), GET /health
+curl -F file=@video.mp4 localhost:8000/estimate
+
+docker compose up -d --build    # serviços `worker` e `api` (python:3.11-slim, torch CPU, yolov8n-seg.pt baixado no build)
 ```
 
 ## Regras do projeto

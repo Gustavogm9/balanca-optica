@@ -28,7 +28,9 @@ dependencies = [
 gbm = ["lightgbm>=4.0"]
 yolo = ["ultralytics>=8.2"]
 auction = ["yt-dlp>=2024.1"]
-dev = ["pytest>=8.0", "ruff>=0.4"]
+worker = ["supabase>=2.0", "python-dotenv"]
+serve = ["fastapi", "uvicorn", "python-multipart"]
+dev = ["pytest>=8.0", "ruff>=0.4", "httpx"]
 
 [project.scripts]
 bo = "balanca_optica.cli:main"

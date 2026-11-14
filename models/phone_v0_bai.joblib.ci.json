@@ -1,0 +1,26 @@
+{
+  "alpha": 0.1,
+  "q_rel": 0.197796869868484,
+  "model_version": "phone_v0_bai_2026-11",
+  "kind": "gbm",
+  "numeric": [
+    "sil_area",
+    "sil_length",
+    "sil_width",
+    "sil_hull_area",
+    "sil_perimeter",
+    "sil_bbox_h",
+    "sil_bbox_w",
+    "sil_body_area",
+    "sil_body_h",
+    "sil_solidity",
+    "sil_eccentricity",
+    "sil_fill"
+  ],
+  "n": 67,
+  "n_groups": 67,
+  "mape_pct": 6.78,
+  "mae_kg": 32.1,
+  "r2": 0.708,
+  "coverage": 0.925
+}

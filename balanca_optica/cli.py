@@ -1,4 +1,4 @@
-"""CLI: bo extract | validate | train | predict | calibrate | capture | pair | import-phone"""
+"""CLI: bo extract | validate | train | predict | calibrate | capture | pair | import-phone | worker | serve"""
 from __future__ import annotations
 
 import argparse
@@ -57,14 +57,29 @@ def cmd_train(a):
     df = pd.read_csv(a.features)
     if a.only_ok and "q_ok" in df:
         df = df[df.q_ok].reset_index(drop=True)
+    if a.view and "view" in df:
+        df = df[df.view == a.view].reset_index(drop=True)
+    if a.with_scale and "scale_src" in df:
+        df = df[df.scale_src != "none"].reset_index(drop=True)
     y = df.weight_kg.values
-    m = WeightRegressor(kind=a.model).fit(df, y)
-    oof = grouped_cv_predict(df, a.model, group_col=a.group, n_splits=a.folds)
+    kw = {}
+    if a.numeric:
+        kw["numeric"] = list(a.numeric)
+    if a.categorical:
+        kw["categorical"] = list(a.categorical)
+    m = WeightRegressor(kind=a.model, version=a.version, **kw).fit(df, y)
+    oof = grouped_cv_predict(df, a.model, group_col=a.group, n_splits=a.folds, **kw)
     ci = ConformalInterval(alpha=a.alpha).fit(y, oof)
+    met = regression_metrics(y, oof)
     Path(a.out).parent.mkdir(parents=True, exist_ok=True)
     m.save(a.out)
-    Path(str(a.out) + ".ci.json").write_text(json.dumps({"alpha": ci.alpha, "q_rel": ci.q_rel}))
-    print(f"modelo salvo em {a.out}; IC {int((1-a.alpha)*100)}% = ±{ci.q_rel*100:.1f}% (n={len(y)})")
+    Path(str(a.out) + ".ci.json").write_text(json.dumps({
+        "alpha": ci.alpha, "q_rel": ci.q_rel, "model_version": a.version, "kind": a.model,
+        "numeric": m.numeric, "n": int(len(y)), "n_groups": int(df[a.group].nunique()) if a.group in df else None,
+        "mape_pct": round(met["mape_pct"], 2), "mae_kg": round(met["mae_kg"], 1), "r2": round(met["r2"], 3),
+        "coverage": round(ci.coverage(y, oof), 3)}, indent=2))
+    print(f"modelo salvo em {a.out}; MAPE out-of-fold {met['mape_pct']:.2f}% ; "
+          f"IC {int((1-a.alpha)*100)}% = ±{ci.q_rel*100:.1f}% (n={len(y)})")
 
 
 def cmd_predict(a):
@@ -190,6 +205,17 @@ def cmd_auction(a):
         au.build_collection_csv(a.csv, a.videos, a.out, farm=a.farm, ref_date=a.ref_date, include_lots=a.include_lots)
 
 
+def cmd_worker(a):
+    from .worker.supabase_worker import main as worker_main
+    worker_main(once=a.once, limit=a.limit, poll_seconds=a.poll)
+
+
+def cmd_serve(a):
+    import uvicorn
+    from .serve import create_app
+    uvicorn.run(create_app(model_path=a.model, seg_weights=a.weights), host=a.host, port=a.port)
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(prog="bo", description="Balança Óptica - motor de estimativa de peso bovino")
     sp = ap.add_subparsers(dest="cmd", required=True)
@@ -212,6 +238,11 @@ def main(argv=None):
     t.add_argument("--model", default="gbm"); t.add_argument("--group", default="animal_id")
     t.add_argument("--folds", type=int, default=None); t.add_argument("--alpha", type=float, default=0.10)
     t.add_argument("--only-ok", action="store_true")
+    t.add_argument("--numeric", nargs="+", default=None, help="features numéricas (ex.: silhueta: sil_area sil_length ...)")
+    t.add_argument("--categorical", nargs="*", default=None)
+    t.add_argument("--view", default=None, help="filtra a coluna view (ex.: lateral)")
+    t.add_argument("--with-scale", action="store_true", help="descarta frames com scale_src=none")
+    t.add_argument("--version", default=None, help="nome da versão gravado no modelo (versao_modelo)")
     t.set_defaults(fn=cmd_train)
 
     p = sp.add_parser("predict", help="estima o peso a partir de 1+ depth.png (mesmo animal)")
@@ -266,6 +297,20 @@ def main(argv=None):
     au.add_argument("--include-lots", action="store_true", help="build: inclui lotes com peso médio (modo lote)")
     au.add_argument("--ref-date", default=None, help="data da pesagem/leilão AAAA-MM-DD para calcular categoria")
     au.set_defaults(fn=cmd_auction)
+
+    wk = sp.add_parser("worker", help="processa vídeos pendentes do Pasto Leve (Supabase) e grava a estimativa")
+    g = wk.add_mutually_exclusive_group()
+    g.add_argument("--once", action="store_true", help="processa a fila uma vez e sai")
+    g.add_argument("--loop", action="store_true", help="fica em loop (padrão)")
+    wk.add_argument("--limit", type=int, default=10, help="registros por ciclo")
+    wk.add_argument("--poll", type=float, default=None, help="segundos entre ciclos (BO_POLL_SECONDS)")
+    wk.set_defaults(fn=cmd_worker)
+
+    sv = sp.add_parser("serve", help="API HTTP: POST /estimate (mídia) e GET /health")
+    sv.add_argument("--host", default="0.0.0.0"); sv.add_argument("--port", type=int, default=8000)
+    sv.add_argument("--model", default=None, help="BO_MODEL (padrão models/phone_v0_bai.joblib)")
+    sv.add_argument("--weights", default=None, help="BO_SEG_WEIGHTS (padrão yolov8n-seg.pt)")
+    sv.set_defaults(fn=cmd_serve)
 
     a = ap.parse_args(argv)
     a.fn(a)
