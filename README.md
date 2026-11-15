@@ -140,7 +140,10 @@ bo serve --port 8000            # API sem Supabase: POST /estimate (multipart fi
 curl -F file=@video.mp4 localhost:8000/estimate
 
 docker compose up -d --build    # serviços `worker` e `api` (python:3.11-slim, torch CPU, yolov8n-seg.pt baixado no build)
+python scripts/smoke_e2e.py     # smoke test ponta a ponta contra um projeto Supabase real (exige SUPABASE_ANON_KEY também)
 ```
+
+Deploy do worker (Fly.io, VPS com Docker Compose ou GitHub Actions a cada 10 min): `docs/deploy.md`.
 
 ## Regras do projeto
 

@@ -1,0 +1,46 @@
+# Opção sem servidor: o GitHub Actions roda `bo worker --once` a cada 10 minutos.
+# Latência de até ~10 min por pesagem (mais o tempo de fila do Actions), custo zero
+# em repositório privado dentro da franquia mensal de minutos.
+#
+# Secrets necessários (Settings > Secrets and variables > Actions):
+#   SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY
+name: Worker (cron)
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: bo-worker
+  cancel-in-progress: false   # nunca interrompe um ciclo no meio: o registro ficaria em 'processando'
+
+jobs:
+  worker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: "Instalar motor (torch CPU antes do ultralytics para não baixar CUDA)"
+        run: |
+          python -m pip install --upgrade pip
+          pip install torch torchvision --index-url https://download.pytorch.org/whl/cpu
+          pip install -e ".[gbm,yolo,worker]"
+
+      # yolov8n-seg.pt e models/phone_v0_bai.joblib estão versionados no repositório,
+      # então o checkout já traz tudo que o worker precisa.
+      - name: Processar a fila uma vez
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          BO_MODEL: models/phone_v0_bai.joblib
+          BO_SEG_WEIGHTS: yolov8n-seg.pt
+          BO_LOG_LEVEL: INFO
+          YOLO_CONFIG_DIR: /tmp/yolo
+        run: bo worker --once --limit 20

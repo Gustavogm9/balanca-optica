@@ -1,0 +1,53 @@
+# Fly.io: worker da Balança Óptica (fila do Pasto Leve) + API HTTP opcional.
+#
+#   flyctl launch --no-deploy --copy-config --name bo-worker --region gru
+#   flyctl secrets set SUPABASE_URL=... SUPABASE_SERVICE_ROLE_KEY=...
+#   flyctl deploy
+#
+# O processo `worker` não expõe porta (só fala com o Supabase). O processo `api`
+# é opcional: `flyctl scale count api=1` para ligar, `api=0` para desligar.
+# Ver docs/deploy.md.
+
+app = "bo-worker"
+primary_region = "gru"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[env]
+  BO_MODEL = "models/phone_v0_bai.joblib"
+  BO_SEG_WEIGHTS = "yolov8n-seg.pt"
+  BO_POLL_SECONDS = "30"
+  BO_LOG_LEVEL = "INFO"
+  YOLO_CONFIG_DIR = "/tmp/yolo"
+
+[processes]
+  worker = "bo worker --loop"
+  api = "bo serve --port 8080"
+
+# Só o processo `api` recebe tráfego; o worker fica sem serviço público.
+[http_service]
+  processes = ["api"]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = "stop"
+  auto_start_machines = true
+  min_machines_running = 0
+
+  [[http_service.checks]]
+    interval = "30s"
+    timeout = "5s"
+    grace_period = "60s"
+    method = "GET"
+    path = "/health"
+
+# YOLO + torch CPU: 1 GB fica apertado; 2 GB é o mínimo confortável.
+[[vm]]
+  processes = ["worker"]
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+[[vm]]
+  processes = ["api"]
+  size = "shared-cpu-2x"
+  memory = "2gb"
